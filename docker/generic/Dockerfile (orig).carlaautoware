@@ -1,0 +1,57 @@
+ARG FROM_ARG
+ARG CARLA_VERSION=0.9.8
+ARG CARLA_BUILD=''
+FROM carlasim/carla:$CARLA_VERSION$CARLA_BUILD as carla
+
+ARG CARLA_VERSION
+
+FROM ${FROM_ARG}
+
+SHELL ["/bin/bash", "-c"]
+
+USER root
+# install git-lfs
+RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | bash
+RUN apt-get update && apt-get install -y --no-install-recommends git-lfs
+RUN git lfs install
+
+# install pip & install simple-pid
+RUN apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y python-pip ros-melodic-ackermann-msgs ros-melodic-derived-object-msgs
+RUN pip install simple-pid pygame networkx==2.2
+#RUN rosdep update
+#RUN rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO
+
+USER autoware
+
+# download carla-autoware
+RUN cd /home/$USERNAME &&git clone https://github.com/carla-simulator/carla-autoware.git
+RUN cd /home/$USERNAME/carla-autoware/ && git reset --hard eec9d6a211f3e2cdc8790705186816427ba42669 && git submodule update --init
+RUN cd /home/$USERNAME/carla-autoware/catkin_ws/ && source /home/autoware/Autoware/install/setup.bash && catkin_init_workspace src/
+RUN cd /home/$USERNAME/carla-autoware/catkin_ws && source /etc/profile.d/ros.sh && source /home/autoware/Autoware/install/setup.bash && catkin_make
+
+USER autoware
+# copy API carla-python 
+# RUN mkdir -p /home/$USERNAME/carla-python
+COPY --from=carla /home/carla/PythonAPI/ /home/$USERNAME/carla-python
+
+# VenetDCP setup
+ADD --chown=autoware ./VenetDCP.tar.xz /home/$USERNAME/Autoware/src/vendor/
+ADD --chown=autoware ./.autoware.tar.xz /home/$USERNAME/
+
+#patch the diff
+COPY ./carla_autware.patch /home/$USERNAME/carla-autoware/
+RUN cd /home/$USERNAME/carla-autoware && patch -p1  < carla_autware.patch
+RUN source /home/$USERNAME/carla-autoware/catkin_ws/devel/setup.bash && cd /home/$USERNAME/carla-autoware/catkin_ws && catkin_make
+
+# export parameter
+RUN echo "source /etc/profile.d/ros.sh" >> /home/$USERNAME/.bashrc
+
+# build Autoware
+RUN cd /home/$USERNAME/Autoware/ && source /home/autoware/Autoware/install/setup.bash && AUTOWARE_COMPILE_WITH_CUDA=1 colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release
+
+#replace Autoware entrypoint
+WORKDIR /home/$USERNAME/
+ENTRYPOINT []
+CMD ["/bin/bash"]

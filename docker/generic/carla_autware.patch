@@ -1,0 +1,583 @@
+diff --git a/autoware_launch/autoware.launch b/autoware_launch/autoware.launch
+index f60105f..f103870 100644
+--- a/autoware_launch/autoware.launch
++++ b/autoware_launch/autoware.launch
+@@ -1,16 +1,10 @@
+ <!-- -->
+ <launch>
+-  <arg name='role_name' default='ego_vehicle'/>
+-
+ 
+   <include file="$(env CARLA_AUTOWARE_ROOT)/my_map.launch"/>
+   <include file="$(env CARLA_AUTOWARE_ROOT)/my_sensing.launch"/>
+-  <include file="$(env CARLA_AUTOWARE_ROOT)/my_localization.launch">
+-    <arg name='role_name' value='$(arg role_name)'/>
+-  </include>
+-  <include file="$(env CARLA_AUTOWARE_ROOT)/my_detection.launch">
+-    <arg name='role_name' value='$(arg role_name)'/>
+-  </include>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_localization.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_detection.launch"/>
+   <include file="$(env CARLA_AUTOWARE_ROOT)/my_mission_planning.launch"/>
+   <include file="$(env CARLA_AUTOWARE_ROOT)/my_motion_planning.launch"/>
+ 
+diff --git a/autoware_launch/devel.launch b/autoware_launch/devel.launch
+index 4c67366..59998e7 100644
+--- a/autoware_launch/devel.launch
++++ b/autoware_launch/devel.launch
+@@ -2,22 +2,15 @@
+ <launch>
+   <arg name='host' default='localhost'/>
+   <arg name='port' default='2000'/>
+-  <arg name='town' default=''/>
+-  <arg name='role_name' default='hero'/>
+-  <!-- use comma separated format "x,y,z,roll,pitch,yaw" -->
+-  <arg name="spawn_point" default=""/>
+-
++<!--
+   <include file="$(find carla_autoware_bridge)/launch/carla_autoware_bridge_with_manual_control.launch">
+-    <arg name='host' value='$(arg host)'/>
+-    <arg name='port' value='$(arg port)'/>
+-    <arg name='town' value='$(arg town)'/>
+-    <arg name='role_name' value='$(arg role_name)'/>
+-    <arg name="spawn_point" value="$(arg spawn_point)"/>
++-->
++  <include file="$(find carla_autoware_bridge)/launch/carla_autoware_bridge.launch">
++    <arg name='host' default='$(arg host)'/>
++    <arg name='port' default='$(arg port)'/>
+   </include>
+ 
+-  <include file="$(env CARLA_AUTOWARE_ROOT)/autoware.launch">
+-    <arg name='role_name' value='$(arg role_name)'/>
+-  </include>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/autoware.launch"/>
+ 
+ </launch>
+ 
+diff --git a/autoware_launch/my_detection.launch b/autoware_launch/my_detection.launch
+index d470cba..4397545 100644
+--- a/autoware_launch/my_detection.launch
++++ b/autoware_launch/my_detection.launch
+@@ -1,14 +1,15 @@
+ <!-- -->
+ <launch>
+-  <arg name='role_name' default='ego_vehicle'/>
+ 
+   <!-- 
+     # lidar_euclidean_cluster_detect #
+     @todo: still required?
+   -->
++<!-- 
+   <include file="$(find lidar_euclidean_cluster_detect)/launch/lidar_euclidean_cluster_detect.launch">
+-    <arg name="output_frame" value="$(arg role_name)/lidar/lidar1" />
++    <arg name="output_frame" value="ego_vehicle/lidar/lidar1" />
+   </include>
++-->
+ 
+   <!-- 
+     # lidar detection #
+diff --git a/autoware_launch/my_localization.launch b/autoware_launch/my_localization.launch
+index dfe6a09..6efc1ea 100644
+--- a/autoware_launch/my_localization.launch
++++ b/autoware_launch/my_localization.launch
+@@ -1,15 +1,16 @@
+ <!-- -->
+ <launch>
+-  <arg name='role_name' default='ego_vehicle'/>
+ 
+   <!--
+     # vehicle_model #
+     provides the vehicle_model mesh to rviz
+   -->
++  <!--
+   <include file="$(find vehicle_description)/launch/vehicle_model.launch">
+     <arg name="offset_x" default="0.0"/>
+     <arg name="model_path" default="$(find vehicle_description)/urdf/prius.urdf"/>
+   </include>
++  -->
+ 
+   <!--
+     # can2odom #
+@@ -21,14 +22,14 @@
+ 
+   <!--
+     # GNSS #
+-    Carla is reporting a gps fix on topic /carla/<role_name>/gnss/front/gnss
++    Carla is reporting a gps fix on topic /carla/ego_vehicle/gnss/front/gnss
+     This can be used as Autoware pose provider. The resulting pose is published on /gnss_pose
+     @todo This is currently disabled. Instead the carla_autoware_bridge publishes a ground-truth /gnss_pose
+   -->
+-  <!--
+-  <node pkg="topic_tools" type="relay" name="gnss_relay" args="/carla/$(arg role_name)/gnss/gnss1/fix /fix"/> 
++<!--
++  <node pkg="topic_tools" type="relay" name="gnss_relay" args="/carla/ego_vehicle/gnss/gnss1/fix /fix"/> 
+   <include file="$(find gnss_localizer)/launch/fix2tfpose.launch"/>
+-  -->
++-->
+ 
+   <!-- Setup -->
+   <arg name="x" value="0" />
+@@ -56,7 +57,9 @@
+     In:  /points_raw
+     Out: /filtered_points
+   -->
++<!--
+   <include file="$(find points_downsampler)/launch/points_downsample.launch" />
++-->
+ 
+   <!-- 
+     # ndt_matching #
+@@ -66,10 +69,15 @@
+          /initialpose    (currently not published)
+     Out: /localizer_pose (estimated pose)
+   -->
++<!--
+   <include file="$(find lidar_localizer)/launch/ndt_matching.launch">
+     <arg name="get_height" value="true" />
+     <arg name="use_gnss" default="true" />
+-    <arg name="use_odom" default="false" /> <!-- @todo: enabling leads to worse results -->
++    <arg name="use_odom" default="false" />
+   </include>
++-->
++
++  <include file="$(find venetdcp)/launch/gnss_localizer.launch" />
+ 
++  <node pkg="topic_tools" type="relay" name="gnss_localizer_relay" args="/gnss_pose /localizer_pose"/> 
+ </launch>
+diff --git a/autoware_launch/my_map.launch b/autoware_launch/my_map.launch
+index b19e3a2..e6e16ad 100644
+--- a/autoware_launch/my_map.launch
++++ b/autoware_launch/my_map.launch
+@@ -7,5 +7,6 @@
+     # Vector Map loader #
+     @todo: currently not provided as there is not conversion from OpenDrive to Autoware map format yet.
+   -->
++  <node pkg="map_file" type="vector_map_loader" name="vector_map_loader" args="$(env HOME)/.autoware/data/map/vector_map/line.csv $(env HOME)/.autoware/data/map/vector_map/point.csv $(env HOME)/.autoware/data/map/vector_map/roadedge.csv $(env HOME)/.autoware/data/map/vector_map/whiteline.csv"/>
+ 
+ </launch>
+diff --git a/autoware_launch/my_mission_planning.launch b/autoware_launch/my_mission_planning.launch
+index 6afa6fe..e7beba0 100644
+--- a/autoware_launch/my_mission_planning.launch
++++ b/autoware_launch/my_mission_planning.launch
+@@ -11,7 +11,10 @@
+     out: /can_velocity
+   -->
+   <include file="$(find autoware_connector)/launch/vel_pose_connect.launch">
++    <arg name="topic_pose_stamped" value="/gnss_pose" />
++<!--
+     <arg name="topic_pose_stamped" value="/ndt_pose" />
++-->
+     <arg name="topic_twist_stamped" value="/estimate_twist" />
+   </include>
+ 
+@@ -25,8 +28,9 @@
+     In:  /light_color_managed     (@todo: not published_yet)
+     In:  /lane_waypoints_array
+   -->
++<!--
+   <node pkg="waypoint_maker" type="waypoint_marker_publisher" name="waypoint_marker_publisher" output="screen"/>
+-
++-->
+ 
+   <!-- lane_rule -->
+   <node pkg="lane_planner" type="lane_rule" name="lane_rule" />
+diff --git a/autoware_launch/my_motion_planning.launch b/autoware_launch/my_motion_planning.launch
+index 6df2d4c..35c6dfc 100644
+--- a/autoware_launch/my_motion_planning.launch
++++ b/autoware_launch/my_motion_planning.launch
+@@ -7,12 +7,20 @@
+     In:  @todo detections
+     Out: /semantics/costmap_generator/occupancy_grid (the costmap, depending on detections)
+   -->
++<!-- 
+   <include file="$(find costmap_generator)/launch/costmap_generator.launch">
+     <arg name="use_objects_box" value="true" />
+     <arg name="use_objects_convex_hull" value="false" />
+     <arg name="use_points" value="true" />
+     <arg name="use_wayarea" value="false" />
+   </include>
++-->
++
++  <!-- waypoint_loader -->
++  <include file="$(find waypoint_maker)/launch/waypoint_loader.launch">
++    <arg name="load_csv" default="true" />
++    <arg name="multi_lane_csv" default="$(env HOME)/.autoware/data/path/carla_waypoints_town04.csv" />
++  </include>
+ 
+   <!-- 
+     # waypoint planner #
+@@ -41,38 +49,26 @@
+     Out: /obstacle_waypoint (@todo: valid?)
+     Out: /detection_range (@todo: not connected yet)
+   -->
++  <node pkg="rostopic" type="rostopic" name="config_velocity_set_rostopic"
++        args="pub -l /config/velocity_set autoware_config_msgs/ConfigVelocitySet
++        '{ header: auto, stop_distance_obstacle: 8, stop_distance_stopline: 5, detection_range: 1.3, threshold_points: 3, detection_height_top: 0.2, detection_height_bottom: -1.7, deceleration_obstacle: 7.8, deceleration_stopline: 0.6, velocity_change_limit: 100, deceleration_range: 0, temporal_waypoints_size: 100 }' " />
+   <include file="$(find waypoint_planner)/launch/velocity_set.launch">
+     <arg name="use_crosswalk_detection" default="false" />
+-    <arg name="points_topic" default="points_no_ground" />
+-    <arg name="velocity_offset" default="1.2" />
++    <arg name="points_topic" default="sim_points_no_ground" />
++    <arg name="velocity_offset" default="22.2" />
+     <arg name="decelerate_vel_min" default="1.3" />
+     <arg name="remove_points_upto" default="2.3" />
+     <arg name="enable_multiple_crosswalk_detection" default="false" />
+   </include>
+ 
+-  <!--
+-    # pure_pursuit #
+-    Follow a list of waypoints
+-    In:  /final_waypoints
+-    In:  /current_pose
+-    In:  /current_velocity
+-    Out: /ctrl_cmd
+-    Out: /twist_raw
+-    Out: /next_target_mark (@todo: not connected yet)
+-    Out: /trajectory_circle_mark (@todo: not connected yet)
+-  -->
++  <!-- pure_pursuit -->
+   <node pkg="rostopic" type="rostopic" name="config_waypoint_follower_rostopic"
+         args="pub -l /config/waypoint_follower autoware_config_msgs/ConfigWaypointFollower
+-        '{ header: auto, param_flag: 1, velocity: 15.0, lookahead_distance: 4.0, lookahead_ratio: 2.0, minimum_lookahead_distance: 6.0, displacement_threshold: 0.0, relative_angle_threshold: 0.0 }' " />
+-  <include file="$(find waypoint_follower)/launch/pure_pursuit.launch"/>
++        '{ header: auto, param_flag: 1, velocity: 5.0, lookahead_distance: 4.0, lookahead_ratio: 2.0, minimum_lookahead_distance: 6.0, displacement_threshold: 0.0, relative_angle_threshold: 0.0 }' "
++  />
++  <include file="$(find pure_pursuit)/launch/pure_pursuit.launch"/>
+ 
+-  <!-- 
+-    # twist_filter #
+-    @todo: purpose?
+-    In:  /twist_raw
+-    In:  /decision_maker/state (@todo: not connected yet)
+-    Out: /vehicle_cmd (the combined vehicle command for actuator)
+-  -->
+-  <include file="$(find waypoint_follower)/launch/twist_filter.launch"/>
++  <!-- twist_filter -->
++  <include file="$(find twist_filter)/launch/twist_filter.launch"/>
+ 
+ </launch>
+diff --git a/autoware_launch/my_sensing.launch b/autoware_launch/my_sensing.launch
+index 4374b88..98dd662 100644
+--- a/autoware_launch/my_sensing.launch
++++ b/autoware_launch/my_sensing.launch
+@@ -8,7 +8,10 @@
+     Out: /points_no_ground (points above ground)
+   -->
+   <include file="$(find points_preprocessor)/launch/ray_ground_filter.launch">
+-    <arg name="sensor_height" value="2.4" />
++<!--    <arg name="sensor_height" default="1.8" />   pengpl comment out--> 
++    <arg name="min_point_distance" default="3.2" />
+   </include>
+ 
++  <include file="$(find venetdcp)/launch/sim_points_no_ground_publisher.launch"/>
++
+ </launch>
+diff --git a/autoware_launch/start.sh b/autoware_launch/start.sh
+old mode 100755
+new mode 100644
+index c385686..cbfd2e7
+--- a/autoware_launch/start.sh
++++ b/autoware_launch/start.sh
+@@ -1,14 +1,8 @@
+ #!/bin/bash -e
+ 
+-# it is assumed, that CARLA is already running
+-
+-
+ #there is a bug in Autoware, that prevents the stack from starting with very low timestamps
+ #https://github.com/autowarefoundation/autoware/issues/2200
+ #
+-#cleanup from previous runs
+-rosnode cleanup <<< 'y'
+-
+ #As a workaround we wait 5 seconds in simulation time
+ echo "Waiting for 5 seconds in simulation time..."
+ python << EOF
+diff --git a/catkin_ws/src/carla_autoware_bridge/config/sensors.json b/catkin_ws/src/carla_autoware_bridge/config/sensors.json
+index cc7d949..51b5fdc 100644
+--- a/catkin_ws/src/carla_autoware_bridge/config/sensors.json
++++ b/catkin_ws/src/carla_autoware_bridge/config/sensors.json
+@@ -2,10 +2,10 @@
+         {
+             "type": "sensor.camera.rgb",
+             "id": "front",
+-            "x": 2.0, "y": 0.0, "z": 2.0, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
++            "x": 2.0, "y": 0.0, "z": 1.3, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
+             "width": 800,
+             "height": 600,
+-            "fov": 100
++            "fov": 30
+         },
+         {
+             "type": "sensor.camera.rgb",
+@@ -18,12 +18,12 @@
+         {
+             "type": "sensor.lidar.ray_cast",
+             "id": "lidar1",
+-            "x": 0.0, "y": 0.0, "z": 2.4, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
+-            "range": 5000,
++            "x": 0.0, "y": 0.0, "z": 1.8, "roll": 0.0, "pitch": 0.0, "yaw": 0.0,
++            "range": 10000,
+             "channels": 32,
+             "points_per_second": 320000,
+-            "upper_fov": 2.0,
+-            "lower_fov": -26.8,
++            "upper_fov": 0.0,
++            "lower_fov": -15.0,
+             "rotation_frequency": 20
+         },
+         {
+diff --git a/launch/autoware.launch b/launch/autoware.launch
+new file mode 100644
+index 0000000..cbd4c43
+--- /dev/null
++++ b/launch/autoware.launch
+@@ -0,0 +1,10 @@
++<!-- -->
++<launch>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_map.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_sensing.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_localization.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_detection.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_mission_planning.launch"/>
++  <include file="$(env CARLA_AUTOWARE_ROOT)/my_motion_planning.launch"/>
++</launch>
++
+diff --git a/launch/autoware.sh b/launch/autoware.sh
+new file mode 100644
+index 0000000..9f1f187
+--- /dev/null
++++ b/launch/autoware.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++export CARLA_AUTOWARE_ROOT=~/carla-autoware/autoware_launch
++export CARLA_MAPS_PATH=~/carla-autoware/autoware_data/maps
++export PYTHONPATH=$PYTHONPATH:~/carla-python/carla/dist/carla-0.9.8-py2.7-linux-x86_64.egg:~/carla-python/carla
++source $CARLA_AUTOWARE_ROOT/../catkin_ws/devel/setup.bash
++source ~/Autoware/install/setup.bash
++sleep 1s
++roslaunch autoware.launch
++
+diff --git a/launch/carla_autoware_bridge.launch b/launch/carla_autoware_bridge.launch
+new file mode 100644
+index 0000000..96359f9
+--- /dev/null
++++ b/launch/carla_autoware_bridge.launch
+@@ -0,0 +1,52 @@
++<!-- -->
++<launch>
++  <arg name='host' default='localhost'/>
++  <arg name='port' default='2000'/>
++  <arg name="vehicle_filter" default='vehicle.toyota.prius*' />
++  <arg name="sensor_definition_file" default='$(find carla_autoware_bridge)/config/sensors.json'/>
++
++  <!--
++    #################
++    # CARLA Clients #
++    #################
++  -->
++  <!-- ros-bridge -->
++  <include file="$(find carla_ros_bridge)/launch/carla_ros_bridge.launch">
++    <arg name='host' value='$(arg host)'/>
++    <arg name='port' value='$(arg port)'/>
++  </include>
++
++  <!-- carla autoware ego vehicle -->
++  <include file="$(find carla_ego_vehicle)/launch/carla_ego_vehicle.launch" >
++    <arg name='host' value='$(arg host)'/>
++    <arg name='port' value='$(arg port)'/>
++    <arg name='vehicle_filter' value='$(arg vehicle_filter)'/>
++  <arg name="sensor_definition_file" default='$(arg sensor_definition_file)'/>
++  </include>
++
++  <!-- carla autoware walker -->
++<!--
++  <include file="$(find carla_walker)/launch/carla_walker.launch" >
++    <arg name='host' value='$(arg host)'/>
++    <arg name='port' value='$(arg port)'/>
++    <arg name="sensor_definition_file" default='$(arg sensor_definition_file)'/>
++  </include>
++-->
++  <!-- mission planning -->
++<!--
++  <include file="$(find carla_waypoint_publisher)/launch/carla_waypoint_publisher.launch" >
++    <arg name='host' value='$(arg host)'/>
++    <arg name='port' value='$(arg port)'/>
++  </include>
++-->
++  <!--
++    ##############################
++    # Map loading                #
++    ##############################
++  -->
++<!--
++  <include file="$(find carla_points_map_loader)/launch/carla_points_map_loader.launch"/>
++-->
++
++</launch>
++
+diff --git a/launch/carla_autoware_bridge.sh b/launch/carla_autoware_bridge.sh
+new file mode 100644
+index 0000000..620d07a
+--- /dev/null
++++ b/launch/carla_autoware_bridge.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++echo "connect carla server : $*"
++export CARLA_AUTOWARE_ROOT=~/carla-autoware/autoware_launch
++export CARLA_MAPS_PATH=~/carla-autoware/autoware_data/maps
++export PYTHONPATH=$PYTHONPATH:~/carla-python/carla/dist/carla-0.9.8-py2.7-linux-x86_64.egg:~/carla-python/carla/
++source $CARLA_AUTOWARE_ROOT/../catkin_ws/devel/setup.bash
++source ~/Autoware/install/setup.bash
++#roslaunch host:=192.168.160.67  port:=2000 carla_autoware_bridge.launch
++roslaunch host:=$1  port:=2000 carla_autoware_bridge.launch
+diff --git a/launch/carla_autoware_bridge_common.launch b/launch/carla_autoware_bridge_common.launch
+new file mode 100644
+index 0000000..aefb8ee
+--- /dev/null
++++ b/launch/carla_autoware_bridge_common.launch
+@@ -0,0 +1,60 @@
++<!-- -->
++<launch>
++  <arg name="wheelbase" default="2.7" /> <!-- distance between front and back axle in meters -->
++
++  <param name="/vehicle_info/wheel_base" type="double" value="$(arg wheelbase)" />
++  <param name="/vehicle_info/minimum_turning_radius" type="double" value="5" />
++  <param name="/vehicle_info/maximum_steering_angle" type="double" value="70" />
++
++
++  <!--
++    ##############################
++    # ROS remapping + conversion #
++    ##############################
++  -->
++  <!--
++    # TF remapping #
++  -->
++  <include file="$(find carla_autoware_bridge)/launch/tf.launch"/>
++
++  <!--
++    # LIDAR #
++    remap carla lidar to autoware.
++    @todo: to reduce load, Autoware should directly use the Carla-topic.
++  -->
++  <node pkg="topic_tools" type="relay" name="points_relay" args="/carla/ego_vehicle/lidar/lidar1/point_cloud /points_raw"/>
++
++  <!-- 
++    # CAMERA #
++    remap carla front camera to autoware
++    @todo: to reduce load, Autoware should directly use the Carla-topic.
++  -->
++  <node pkg="topic_tools" type="relay" name="imag_relay" args="/carla/ego_vehicle/camera/rgb/front/image_color /image_raw"/>
++
++  <!-- 
++    # GNSS #
++    Extract the pose from the carla odometry. 
++    Disable this if Autoware should calculate its pose from gnss (see my_localization.launch)
++  -->
++  <node pkg="carla_autoware_bridge" type="odometry_to_posestamped" name="odometry_to_posestamped"/>
++
++  <!-- convert twist to carla ackermann drive-->
++  <node pkg="carla_autoware_bridge" type="vehiclecmd_to_ackermanndrive" name="vehiclecmd_to_ackermanndrive" output="screen">
++    <param name="wheelbase" value="$(arg wheelbase)"/>
++  </node>
++
++  <!-- convert the vehicle status from carla to autoware -->
++  <node pkg="carla_autoware_bridge" type="carla_to_autoware_vehicle_status" name="carla_to_autoware_vehicle_status" output="screen"/>
++
++  <!-- convert waypoint path to autoware lane_array -->
++<!--
++  <node pkg="carla_autoware_bridge" type="carla_to_autoware_waypoints" name="carla_to_autoware_waypoints" output="screen"/>
++-->
++  <!-- 
++    # ACTUATOR #
++    convert ackermann control to carla vehicle control (with PID controller)
++  -->
++  <include file="$(find carla_ackermann_control)/launch/carla_ackermann_control.launch"/>
++
++</launch>
++
+diff --git a/launch/carla_autoware_bridge_common.sh b/launch/carla_autoware_bridge_common.sh
+new file mode 100644
+index 0000000..6b6378f
+--- /dev/null
++++ b/launch/carla_autoware_bridge_common.sh
+@@ -0,0 +1,10 @@
++#!/bin/bash
++echo "connect carla server : $*"
++export CARLA_AUTOWARE_ROOT=~/carla-autoware/autoware_launch
++export CARLA_MAPS_PATH=~/carla-autoware/autoware_data/maps
++export PYTHONPATH=$PYTHONPATH:~/carla-python/carla/dist/carla-0.9.8-py2.7-linux-x86_64.egg:~/carla-python/carla/
++source $CARLA_AUTOWARE_ROOT/../catkin_ws/devel/setup.bash
++source ~/Autoware/install/setup.bash
++#roslaunch host:=192.168.160.67  port:=2000 carla_autoware_bridge_common.launch
++roslaunch host:=$1  port:=2000 carla_autoware_bridge_common.launch
++
+diff --git a/launch/run.sh b/launch/run.sh
+new file mode 100644
+index 0000000..bdc1e90
+--- /dev/null
++++ b/launch/run.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++gnome-terminal -- roscore
++sleep 1s
++gnome-terminal \
++--tab -e "bash autoware.sh" \
++--tab -e "bash vehicle_model.sh" \
++--tab -e "bash carla_autoware_bridge_common.sh" \
++--tab -e "bash carla_autoware_bridge.sh"
++
+diff --git a/launch/run_rviz.sh b/launch/run_rviz.sh
+new file mode 100644
+index 0000000..d6fd5e8
+--- /dev/null
++++ b/launch/run_rviz.sh
+@@ -0,0 +1,13 @@
++#!/bin/bash
++echo "connect carla server : $*"
++gnome-terminal -- roscore
++sleep 1s
++gnome-terminal \
++--tab -e "bash autoware.sh" \
++--tab -e "bash vehicle_model.sh" \
++--tab -e "bash carla_autoware_bridge_common.sh $1" \
++--tab -e "bash carla_autoware_bridge.sh $1"
++#gnome-terminal -e "bash -c 'source ~/Autoware/ros/install/setup.bash; rosrun rviz rviz -d ~/Autoware/ros/src/.config/rviz/venet_dcp.rviz'"
++gnome-terminal -e "bash -c 'source ~/Autoware/install/setup.bash; rosrun rviz rviz -d ~/Autoware/src/vendor/VenetDCP/.config/venet_dcp.rviz'"
++
++
+diff --git a/launch/vehicle_model.launch b/launch/vehicle_model.launch
+new file mode 100644
+index 0000000..d1df560
+--- /dev/null
++++ b/launch/vehicle_model.launch
+@@ -0,0 +1,13 @@
++<!-- -->
++<launch>
++
++  <!--
++    # vehicle_model #
++    provides the vehicle_model mesh to rviz
++  -->
++  <include file="$(find vehicle_description)/launch/vehicle_model.launch">
++    <arg name="offset_x" default="0.0"/>
++    <arg name="model_path" default="$(find vehicle_description)/urdf/default.urdf"/>
++  </include>
++
++</launch>
+diff --git a/launch/vehicle_model.sh b/launch/vehicle_model.sh
+new file mode 100644
+index 0000000..c8d4912
+--- /dev/null
++++ b/launch/vehicle_model.sh
+@@ -0,0 +1,9 @@
++#!/bin/bash
++export CARLA_AUTOWARE_ROOT=~/carla-autoware/autoware_launch
++export CARLA_MAPS_PATH=~/carla-autoware/autoware_data/maps
++#export PYTHONPATH=$PYTHONPATH:~/carla-python/carla/dist/carla-0.9.5-py2.7-linux-x86_64.egg:~/carla-python/carla
++export PYTHONPATH=$PYTHONPATH:~/carla-python/carla/dist/carla-0.9.8-py2.7-linux-x86_64.egg:~/carla-python/carla/
++source $CARLA_AUTOWARE_ROOT/../catkin_ws/devel/setup.bash
++source ~/Autoware/install/setup.bash
++roslaunch vehicle_model.launch
++
